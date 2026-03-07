@@ -62,7 +62,7 @@ const Cell = memo(function Cell({
 export default function DocPage() {
   const params = useParams();
   const id = params?.id as string;
-  const { user, loading } = useAuth();
+  const { user, loading, setUserColor } = useAuth();
   const router = useRouter();
 
   const [cells, setCells] = useState<Record<string, CellData>>({});
@@ -76,6 +76,8 @@ export default function DocPage() {
   const [rowHeights, setRowHeights] = useState<number[]>(Array(ROWS).fill(DEFAULT_ROW_HEIGHT));
   const [dark, setDark] = useState(false);
   const [ready, setReady] = useState(false);
+  const [lastModifiedBy, setLastModifiedBy] = useState<string>("");
+  const [updatedAt, setUpdatedAt] = useState<number>(0);
   const { presentUsers, updateSelectedCell } = usePresence(id, user);
 
   const cellsRef = useRef<Record<string, CellData>>({});
@@ -103,6 +105,8 @@ export default function DocPage() {
         const data = snap.data();
         setCells(data.cells || {});
         setTitle(data.title || "Untitled Spreadsheet");
+        setLastModifiedBy(data.lastModifiedBy || "");
+        setUpdatedAt(data.updatedAt?.toMillis?.() || Date.now());
         setReady(true);
       } else {
         router.push("/dashboard");
@@ -123,20 +127,34 @@ export default function DocPage() {
     setSaveStatus("saving");
     saveTimer.current = setTimeout(async () => {
       try {
-        await updateDoc(doc(db, "sheets", id), { cells: newCells, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "sheets", id), {
+          cells: newCells,
+          updatedAt: serverTimestamp(),
+          lastModifiedBy: user?.displayName || "Unknown",
+        });
         setSaveStatus("saved");
-      } catch {
+      } catch (err) {
+        console.error("Save error:", err);
         setSaveStatus("unsaved");
       }
     }, 600);
-  }, [id]);
+  }, [id, user]);
 
   const commitEdit = useCallback((cellId: string, value: string) => {
     const isFormula = value.startsWith("=");
     const prev = cellsRef.current[cellId] || {};
+    const cellUpdate: CellData = {
+      ...prev,
+      value: isFormula ? "" : value,
+    };
+    if (isFormula) {
+      cellUpdate.formula = value;
+    } else {
+      delete cellUpdate.formula;
+    }
     const newCells = {
       ...cellsRef.current,
-      [cellId]: { ...prev, value: isFormula ? "" : value, formula: isFormula ? value : undefined },
+      [cellId]: cellUpdate,
     };
     setCells(newCells);
     pushSave(newCells);
@@ -311,9 +329,16 @@ export default function DocPage() {
           </button>
         </div>
 
-        <span style={{ fontSize: "12px", color: saveStatus === "saved" ? "#0f9d58" : saveStatus === "saving" ? "#f4b400" : "#ea4335", marginRight: "8px" }}>
-          {saveStatus === "saved" ? "✓ Saved" : saveStatus === "saving" ? "Saving..." : "⚠ Unsaved"}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginRight: "8px" }}>
+          <span style={{ fontSize: "12px", color: saveStatus === "saved" ? "#0f9d58" : saveStatus === "saving" ? "#f4b400" : "#ea4335" }}>
+            {saveStatus === "saved" ? "✓ Saved" : saveStatus === "saving" ? "Saving..." : "⚠ Unsaved"}
+          </span>
+          {lastModifiedBy && (
+            <span style={{ fontSize: "10px", color: T.subText }}>
+              Last edit by {lastModifiedBy} · {updatedAt ? new Date(updatedAt).toLocaleTimeString() : ""}
+            </span>
+          )}
+        </div>
 
           {/* Online users */}
         <div style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "8px" }}>
@@ -348,6 +373,20 @@ export default function DocPage() {
           onMouseLeave={(e) => (e.currentTarget.style.background = "none")}>
           📥 Export CSV
         </button>
+
+        <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 2px" }} />
+
+        {/* User color picker */}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "4px", background: dark ? "#2a2a3e" : "#f1f3f4" }}>
+          <span style={{ fontSize: "11px", color: T.subText }}>Your color:</span>
+          <input
+            type="color"
+            value={user?.color || "#667eea"}
+            onChange={(e) => setUserColor(e.target.value)}
+            style={{ width: "24px", height: "24px", border: "none", padding: 0, cursor: "pointer", borderRadius: "50%", background: "none" }}
+            title="Change your presence color"
+          />
+        </div>
 
         <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 2px" }} />
 

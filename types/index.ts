@@ -23,6 +23,7 @@ export interface Sheet {
   updatedAt: number;
   ownerId: string;
   ownerName: string;
+  lastModifiedBy?: string;
 }
 
 export interface PresenceUser {

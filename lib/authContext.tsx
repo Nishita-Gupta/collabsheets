@@ -31,6 +31,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   setDisplayName: (name: string) => Promise<void>;
+  setUserColor: (color: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -76,8 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setUserColor = (color: string) => {
+    setUser((prev) => prev ? { ...prev, color } : null);
+  };
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, setDisplayName }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, setDisplayName, setUserColor }}>
       {children}
     </AuthContext.Provider>
   );

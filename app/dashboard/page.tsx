@@ -68,11 +68,14 @@ export default function Dashboard() {
     }
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp: any) => {
     if (!timestamp) return "Just now";
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      month: "short", day: "numeric", year: "numeric"
-    });
+    // Handle Firestore Timestamp object
+    if (timestamp?.toMillis) return new Date(timestamp.toMillis()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    // Handle seconds-based timestamp
+    if (timestamp?.seconds) return new Date(timestamp.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    // Handle regular number
+    return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   if (loading) {
