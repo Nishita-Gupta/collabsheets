@@ -28,20 +28,20 @@ function parseCell(cellId: string) {
 
 const Cell = memo(function Cell({
   isSelected, isEditing, displayValue, cell, editValue,
-  onMouseDown, onDoubleClick, onEditChange, onEditBlur, onEditKeyDown, dark,
+  onMouseDown, onDoubleClick, onEditChange, onEditBlur, onEditKeyDown, dark, presenceColor,
 }: {
   isSelected: boolean; isEditing: boolean; displayValue: string;
   cell?: CellData; editValue: string; onMouseDown: () => void;
   onDoubleClick: () => void; onEditChange: (v: string) => void;
   onEditBlur: () => void; onEditKeyDown: (e: React.KeyboardEvent) => void;
-  dark: boolean;
+  dark: boolean; presenceColor?: string;
 }) {
   const bg = isSelected ? (dark ? "#1e3a5f" : "#e8f0fe") : (cell?.bgColor || (dark ? "#1e1e2e" : "white"));
   return (
     <td onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}
       style={{
         height: `${DEFAULT_ROW_HEIGHT}px`, padding: 0,
-        border: isSelected ? "2px solid #1a73e8" : `1px solid ${dark ? "#2a2a3e" : "#e0e0e0"}`,
+        border: isSelected ? "2px solid #1a73e8" : presenceColor ? `2px solid ${presenceColor}` : `1px solid ${dark ? "#2a2a3e" : "#e0e0e0"}`,
         background: bg, cursor: "cell", overflow: "hidden",
         minWidth: `${DEFAULT_COL_WIDTH}px`, maxWidth: `${DEFAULT_COL_WIDTH}px`,
       }}>
@@ -93,9 +93,7 @@ export default function DocPage() {
   cellsRef.current = cells;
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/");
-    }
+    if (!loading && !user) router.push("/");
   }, [loading, user, router]);
 
   useEffect(() => {
@@ -114,6 +112,10 @@ export default function DocPage() {
     });
     return () => unsub();
   }, [id, router]);
+
+  useEffect(() => {
+    document.title = `${title} — CollabSheet`;
+  }, [title]);
 
   const getCellValue = useCallback((cellId: string): string => {
     const cell = cellsRef.current[cellId];
@@ -143,28 +145,18 @@ export default function DocPage() {
   const commitEdit = useCallback((cellId: string, value: string) => {
     const isFormula = value.startsWith("=");
     const prev = cellsRef.current[cellId] || {};
-    const cellUpdate: CellData = {
-      ...prev,
-      value: isFormula ? "" : value,
-    };
-    if (isFormula) {
-      cellUpdate.formula = value;
-    } else {
-      delete cellUpdate.formula;
-    }
-    const newCells = {
-      ...cellsRef.current,
-      [cellId]: cellUpdate,
-    };
+    const cellUpdate: CellData = { ...prev, value: isFormula ? "" : value };
+    if (isFormula) cellUpdate.formula = value;
+    else delete cellUpdate.formula;
+    const newCells = { ...cellsRef.current, [cellId]: cellUpdate };
     setCells(newCells);
     pushSave(newCells);
   }, [pushSave]);
 
   const startEdit = useCallback((cellId: string, initial?: string) => {
     const cell = cellsRef.current[cellId];
-    const val = initial ?? (cell?.formula || cell?.value || "");
     setEditingCell(cellId);
-    setEditValue(val);
+    setEditValue(initial ?? (cell?.formula || cell?.value || ""));
   }, []);
 
   const stopEdit = useCallback((shouldSave = true) => {
@@ -179,20 +171,26 @@ export default function DocPage() {
   const navigate = useCallback((dr: number, dc: number) => {
     setSelectedCell(prev => {
       const { row, col } = parseCell(prev);
-      return getCellId(Math.max(0, Math.min(ROWS - 1, row + dr)), Math.max(0, Math.min(COLS - 1, col + dc)));
+      const newCell = getCellId(
+        Math.max(0, Math.min(ROWS - 1, row + dr)),
+        Math.max(0, Math.min(COLS - 1, col + dc))
+      );
+      updateSelectedCell(newCell);
+      return newCell;
     });
-  }, []);
+  }, [updateSelectedCell]);
 
   const handleGridKey = useCallback((e: React.KeyboardEvent) => {
     if (editingCellRef.current) return;
     switch (e.key) {
-      case "ArrowUp": e.preventDefault(); navigate(-1, 0); updateSelectedCell(selectedCell); break;
-      case "ArrowDown": e.preventDefault(); navigate(1, 0); updateSelectedCell(selectedCell); break;
-      case "ArrowLeft": e.preventDefault(); navigate(0, -1); updateSelectedCell(selectedCell); break;
-      case "ArrowRight": e.preventDefault(); navigate(0, 1); updateSelectedCell(selectedCell); break;
+      case "ArrowUp": e.preventDefault(); navigate(-1, 0); break;
+      case "ArrowDown": e.preventDefault(); navigate(1, 0); break;
+      case "ArrowLeft": e.preventDefault(); navigate(0, -1); break;
+      case "ArrowRight": e.preventDefault(); navigate(0, 1); break;
       case "Enter": e.preventDefault(); startEdit(selectedCell); break;
       case "Tab": e.preventDefault(); navigate(0, e.shiftKey ? -1 : 1); break;
-      case "Delete": case "Backspace": e.preventDefault(); commitEdit(selectedCell, ""); break;
+      case "Delete":
+      case "Backspace": e.preventDefault(); commitEdit(selectedCell, ""); break;
       default:
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) startEdit(selectedCell, "");
     }
@@ -247,9 +245,18 @@ export default function DocPage() {
     resizingCol.current = { col, startX: e.clientX, startWidth: colWidths[col] };
     const onMove = (me: MouseEvent) => {
       if (!resizingCol.current) return;
-      setColWidths(prev => { const n = [...prev]; n[resizingCol.current!.col] = Math.max(40, resizingCol.current!.startWidth + me.clientX - resizingCol.current!.startX); return n; });
+      const { col: c, startX, startWidth } = resizingCol.current;
+      setColWidths(prev => {
+        const n = [...prev];
+        n[c] = Math.max(40, startWidth + me.clientX - startX);
+        return n;
+      });
     };
-    const onUp = () => { resizingCol.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    const onUp = () => {
+      resizingCol.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
@@ -259,15 +266,25 @@ export default function DocPage() {
     resizingRow.current = { row, startY: e.clientY, startHeight: rowHeights[row] };
     const onMove = (me: MouseEvent) => {
       if (!resizingRow.current) return;
-      setRowHeights(prev => { const n = [...prev]; n[resizingRow.current!.row] = Math.max(20, resizingRow.current!.startHeight + me.clientY - resizingRow.current!.startY); return n; });
+      const { row: r, startY, startHeight } = resizingRow.current;
+      setRowHeights(prev => {
+        const n = [...prev];
+        n[r] = Math.max(20, startHeight + me.clientY - startY);
+        return n;
+      });
     };
-    const onUp = () => { resizingRow.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    const onUp = () => {
+      resizingRow.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
 
   const saveTitle = async (val: string) => {
-    setTitle(val); setEditingTitle(false);
+    setTitle(val);
+    setEditingTitle(false);
     if (id) await updateDoc(doc(db, "sheets", id), { title: val });
   };
 
@@ -340,7 +357,7 @@ export default function DocPage() {
           )}
         </div>
 
-          {/* Online users */}
+        {/* Online users */}
         <div style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "8px" }}>
           {presentUsers.map((u) => (
             <div key={u.uid}
@@ -355,6 +372,7 @@ export default function DocPage() {
             </span>
           )}
         </div>
+
         <button onClick={() => setDark(d => !d)}
           style={{ width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${T.border}`, background: dark ? "#2a2a3e" : "#f1f3f4", cursor: "pointer", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {dark ? "☀️" : "🌙"}
@@ -367,6 +385,7 @@ export default function DocPage() {
 
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: "2px", padding: "4px 8px", borderBottom: `1px solid ${T.border}`, background: T.toolbarBg, flexShrink: 0 }}>
+
         <button onClick={exportCSV}
           style={{ padding: "3px 10px", borderRadius: "4px", border: "none", background: "none", cursor: "pointer", fontSize: "12px", color: T.text }}
           onMouseEnter={(e) => (e.currentTarget.style.background = dark ? "#2a2a3e" : "#e8eaed")}
@@ -377,15 +396,14 @@ export default function DocPage() {
         <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 2px" }} />
 
         {/* User color picker */}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "4px", background: dark ? "#2a2a3e" : "#f1f3f4" }}>
-          <span style={{ fontSize: "11px", color: T.subText }}>Your color:</span>
-          <input
-            type="color"
-            value={user?.color || "#667eea"}
-            onChange={(e) => setUserColor(e.target.value)}
-            style={{ width: "24px", height: "24px", border: "none", padding: 0, cursor: "pointer", borderRadius: "50%", background: "none" }}
-            title="Change your presence color"
-          />
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 8px", borderRadius: "4px", background: dark ? "#2a2a3e" : "#f1f3f4" }}>
+          <span style={{ fontSize: "11px", color: T.subText }}>You:</span>
+          <div style={{ position: "relative", width: "20px", height: "20px", borderRadius: "50%", background: user?.color || "#667eea", cursor: "pointer", overflow: "hidden", border: "2px solid white", boxShadow: "0 0 0 1px #ccc" }}>
+            <input type="color" value={user?.color || "#667eea"}
+              onChange={(e) => setUserColor(e.target.value)}
+              style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              title="Change your color" />
+          </div>
         </div>
 
         <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 2px" }} />
@@ -406,16 +424,24 @@ export default function DocPage() {
 
         <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 2px" }} />
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }} title="Text color">
-          <span style={{ fontSize: "12px", fontWeight: 700, color: T.text }}>A</span>
-          <input type="color" value={selCell?.color || "#000000"} onChange={(e) => setTextColor(e.target.value)}
-            style={{ width: "22px", height: "4px", border: "none", padding: 0, cursor: "pointer" }} />
+        {/* Text color */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1px", cursor: "pointer" }} title="Text color">
+          <span style={{ fontSize: "12px", fontWeight: 700, color: selCell?.color || T.text, lineHeight: 1 }}>A</span>
+          <div style={{ position: "relative", width: "22px", height: "4px", borderRadius: "2px", background: selCell?.color || "#000000" }}>
+            <input type="color" value={selCell?.color || "#000000"}
+              onChange={(e) => setTextColor(e.target.value)}
+              style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+          </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginLeft: "4px" }} title="Fill color">
-          <span style={{ fontSize: "12px", color: T.text }}>🪣</span>
-          <input type="color" value={selCell?.bgColor || "#ffffff"} onChange={(e) => setBgColor(e.target.value)}
-            style={{ width: "22px", height: "4px", border: "none", padding: 0, cursor: "pointer" }} />
+        {/* Fill color */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1px", cursor: "pointer", marginLeft: "4px" }} title="Fill color">
+          <span style={{ fontSize: "12px", color: T.text, lineHeight: 1 }}>🪣</span>
+          <div style={{ position: "relative", width: "22px", height: "4px", borderRadius: "2px", background: selCell?.bgColor || "#ffffff", border: "1px solid #ccc" }}>
+            <input type="color" value={selCell?.bgColor || "#ffffff"}
+              onChange={(e) => setBgColor(e.target.value)}
+              style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+          </div>
         </div>
 
         <div style={{ width: "1px", height: "20px", background: T.border, margin: "0 4px" }} />
@@ -467,6 +493,7 @@ export default function DocPage() {
                       cell={cells[cellId]}
                       editValue={editValue}
                       dark={dark}
+                      presenceColor={presentUsers.find(u => u.uid !== user?.uid && u.selectedCell === cellId)?.color}
                       onMouseDown={() => { if (editingCell) stopEdit(true); setSelectedCell(cellId); updateSelectedCell(cellId); gridRef.current?.focus(); }}
                       onDoubleClick={() => startEdit(cellId)}
                       onEditChange={setEditValue}
