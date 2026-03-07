@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore";
 import { CellData } from "@/types";
 import { evaluateFormula } from "@/lib/formulaParser";
+import { usePresence } from "@/hooks/usePresence";
 
 const ROWS = 100;
 const COLS = 26;
@@ -75,6 +76,7 @@ export default function DocPage() {
   const [rowHeights, setRowHeights] = useState<number[]>(Array(ROWS).fill(DEFAULT_ROW_HEIGHT));
   const [dark, setDark] = useState(false);
   const [ready, setReady] = useState(false);
+  const { presentUsers, updateSelectedCell } = usePresence(id, user);
 
   const cellsRef = useRef<Record<string, CellData>>({});
   const editValueRef = useRef("");
@@ -166,15 +168,15 @@ export default function DocPage() {
   const handleGridKey = useCallback((e: React.KeyboardEvent) => {
     if (editingCellRef.current) return;
     switch (e.key) {
-      case "ArrowUp": e.preventDefault(); navigate(-1, 0); break;
-      case "ArrowDown": e.preventDefault(); navigate(1, 0); break;
-      case "ArrowLeft": e.preventDefault(); navigate(0, -1); break;
-      case "ArrowRight": e.preventDefault(); navigate(0, 1); break;
+      case "ArrowUp": e.preventDefault(); navigate(-1, 0); updateSelectedCell(selectedCell); break;
+      case "ArrowDown": e.preventDefault(); navigate(1, 0); updateSelectedCell(selectedCell); break;
+      case "ArrowLeft": e.preventDefault(); navigate(0, -1); updateSelectedCell(selectedCell); break;
+      case "ArrowRight": e.preventDefault(); navigate(0, 1); updateSelectedCell(selectedCell); break;
       case "Enter": e.preventDefault(); startEdit(selectedCell); break;
       case "Tab": e.preventDefault(); navigate(0, e.shiftKey ? -1 : 1); break;
       case "Delete": case "Backspace": e.preventDefault(); commitEdit(selectedCell, ""); break;
       default:
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) startEdit(selectedCell, e.key);
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) startEdit(selectedCell, "");
     }
   }, [navigate, selectedCell, startEdit, commitEdit]);
 
@@ -313,6 +315,21 @@ export default function DocPage() {
           {saveStatus === "saved" ? "✓ Saved" : saveStatus === "saving" ? "Saving..." : "⚠ Unsaved"}
         </span>
 
+          {/* Online users */}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "8px" }}>
+          {presentUsers.map((u) => (
+            <div key={u.uid}
+              title={`${u.displayName} — ${u.selectedCell || "browsing"}`}
+              style={{ width: "28px", height: "28px", borderRadius: "50%", background: u.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700, color: "white", border: "2px solid white", marginLeft: "-6px", cursor: "default", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}>
+              {u.displayName?.charAt(0).toUpperCase()}
+            </div>
+          ))}
+          {presentUsers.length > 0 && (
+            <span style={{ fontSize: "11px", color: T.subText, marginLeft: "6px" }}>
+              {presentUsers.length} online
+            </span>
+          )}
+        </div>
         <button onClick={() => setDark(d => !d)}
           style={{ width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${T.border}`, background: dark ? "#2a2a3e" : "#f1f3f4", cursor: "pointer", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {dark ? "☀️" : "🌙"}
@@ -411,7 +428,7 @@ export default function DocPage() {
                       cell={cells[cellId]}
                       editValue={editValue}
                       dark={dark}
-                      onMouseDown={() => { if (editingCell) stopEdit(true); setSelectedCell(cellId); gridRef.current?.focus(); }}
+                      onMouseDown={() => { if (editingCell) stopEdit(true); setSelectedCell(cellId); updateSelectedCell(cellId); gridRef.current?.focus(); }}
                       onDoubleClick={() => startEdit(cellId)}
                       onEditChange={setEditValue}
                       onEditBlur={() => stopEdit(true)}
