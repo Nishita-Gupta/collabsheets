@@ -12,6 +12,7 @@ export interface CellData {
   bold?: boolean;
   italic?: boolean;
   color?: string;
+  bgColor?: string;
 }
 
 export interface Sheet {
