@@ -87,7 +87,7 @@ export default function Home() {
               Real-time collaborative spreadsheets
             </p>
             <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginTop: "12px", flexWrap: "wrap" }}>
-              {["⚡ Real-time", "👥 Multiplayer", "📊 Formulas"].map((f) => (
+              {["Real-time", "Multiuser", "Formulas"].map((f) => (
                 <span key={f} style={{
                   fontSize: "11px", padding: "4px 10px", borderRadius: "20px",
                   background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)"
