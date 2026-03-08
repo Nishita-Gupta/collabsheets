@@ -33,22 +33,23 @@ export default function Home() {
   };
 
   const handleGuestSignIn = async () => {
-    if (!displayName.trim()) {
-      setError("Please enter a display name.");
-      return;
-    }
-    try {
-      setIsLoading(true);
-      setError("");
-      const result = await signInAnonymously(auth);
-      await updateProfile(result.user, { displayName: displayName.trim() });
-      router.push("/dashboard");
-    } catch {
-      setError("Failed to sign in. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (!displayName.trim()) {
+    setError("Please enter a display name.");
+    return;
+  }
+  try {
+    setIsLoading(true);
+    setError("");
+    const result = await signInAnonymously(auth);
+    await updateProfile(result.user, { displayName: displayName.trim() });
+    localStorage.setItem("guestDisplayName", displayName.trim());
+    router.push("/dashboard");
+  } catch {
+    setError("Failed to sign in. Please try again.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   if (loading) {
     return (

@@ -1,5 +1,4 @@
 "use client";
-
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   onAuthStateChanged,
@@ -11,7 +10,6 @@ import {
 import { auth } from "./firebase";
 import { User } from "@/types";
 
-// Generate a consistent color from a user ID
 function generateColor(uid: string): string {
   const colors = [
     "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4",
@@ -43,9 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
+        const savedName = typeof window !== "undefined" ? localStorage.getItem("guestDisplayName") : null;
         setUser({
           uid: firebaseUser.uid,
-          displayName: firebaseUser.displayName || "Anonymous",
+          displayName: firebaseUser.displayName || savedName || "Anonymous",
           email: firebaseUser.email || "",
           color: generateColor(firebaseUser.uid),
           photoURL: firebaseUser.photoURL || undefined,
@@ -55,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -71,15 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setDisplayName = async (name: string) => {
     if (auth.currentUser) {
       await updateProfile(auth.currentUser, { displayName: name });
-      setUser((prev) =>
-        prev ? { ...prev, displayName: name } : null
-      );
+      setUser((prev) => prev ? { ...prev, displayName: name } : null);
     }
   };
 
   const setUserColor = (color: string) => {
     setUser((prev) => prev ? { ...prev, color } : null);
   };
+
   return (
     <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, setDisplayName, setUserColor }}>
       {children}
