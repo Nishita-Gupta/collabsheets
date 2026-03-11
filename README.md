@@ -2,7 +2,7 @@
 
 A real-time collaborative spreadsheet application Think Google Sheets, stripped to its core — focused on architectural decisions, real-time sync, and clean code.
 
-**Live Demo:** [collabsheet.vercel.app](https://collabsheet.vercel.app)
+**Live Demo:** [collabsheets.vercel.app](https://collabsheets.vercel.app)
 
 ---
 
